@@ -6,6 +6,7 @@ import (
 	"github.com/choria-io/fisk"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -16,6 +17,12 @@ const appName = "paws"
 
 //go:embed .version
 var fullVersion string
+
+//go:embed examples.md
+var cheatExamples string
+
+//go:embed examples/docker-mysql.sh
+var cheatDocker string
 
 var quiet bool
 var dots bool
@@ -39,44 +46,56 @@ func main() {
 	checkCMD.Flag("timeout", "Timeout for all connect and read timeouts").Short('t').Default("250ms").DurationVar(&timeout)
 	checkCMD.Flag("delay", "Minimal time between checks when waiting").Short('d').Default("250ms").DurationVar(&delay)
 
-	portsRaw := []string{}
-	checkCMD.Arg("ports", "the posts to watch for").PlaceHolder("(service:)(host:)port(-udp|-tcp)").Help("Ports to scan (if you need host but without service name you can use use ':host:port'").Required().StringsVar(&portsRaw)
+	servicesRaw := []string{}
+	checkCMD.Arg("services", "the services (ports) to check").
+		PlaceHolder("(service(-udp|-tcp):)((host):)port or service(-udp|-tcp)://(user(:pass))@(host):port").
+		Help("Services to scan (see 'paws cheat examples' for more information))").Required().StringsVar(&servicesRaw)
 
-	ax.Cheat("examples", "paws ssh:22")
+	ax.Cheat("examples", cheatExamples)
+	ax.Cheat("docker", cheatDocker)
 
 	ax.MustParseWithUsage(os.Args[1:])
 
-	ports := make(map[string]string)
+	ports := make(map[string]*url.URL)
 	//ctx := ax.Context(context.Background(), nil, nil)
 	var err error
 
-	for _, portString := range portsRaw {
-		parts := strings.SplitN(portString, ":", 3)
-		var port string
-		var service string
-		if len(parts) == 3 {
-			_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[2], "-udp"), "-tcp"))
-			ax.FatalIfError(err, "could not parse port information")
-			port = parts[1] + ":" + parts[2]
-			service = parts[0]
-		} else if len(parts) == 2 {
-			_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[1], "-udp"), "-tcp"))
-			ax.FatalIfError(err, "could not parse port information")
-			port = parts[1]
-			service = parts[0]
+	for _, serviceString := range servicesRaw {
+		uri, _ := url.Parse("noname://" + host + ":1")
+		ax.FatalIfError(err, "internal error: could not parse definition")
+		if strings.Contains(serviceString, "://") {
+			// This is the URI variant for the port definition
+			uri, err = url.Parse(serviceString)
+			ax.FatalIfError(err, "could not parse port definition")
 		} else {
-			_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[0], "-udp"), "-tcp"))
-			ax.FatalIfError(err, "could not parse port as int")
-			port = parts[0]
-			service = parts[0]
+			var frag string
+			var parts []string
+			parts = strings.SplitN(serviceString, ":", 3)
+			if len(parts) == 3 {
+				_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[2], "-udp"), "-tcp"))
+				ax.FatalIfError(err, "could not parse port information")
+				uri.Scheme = parts[0]
+				frag = parts[1] + ":" + parts[2]
+			} else if len(parts) == 2 {
+				_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[1], "-udp"), "-tcp"))
+				ax.FatalIfError(err, "could not parse port information")
+				uri.Scheme = parts[0]
+				frag = parts[1]
+			} else {
+				_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[0], "-udp"), "-tcp"))
+				ax.FatalIfError(err, "could not parse port as int")
+				uri.Scheme = parts[0]
+				frag = parts[0]
+			}
+			if !strings.Contains(frag, ":") {
+				frag = net.JoinHostPort(host, frag)
+			}
+			uri.Host = frag
 		}
-		if _, ok := ports[port]; ok {
-			ax.Fatalf("duplicate port")
+		if _, ok := ports[uri.String()]; ok {
+			ax.Fatalf("duplicate check %q", uri.String())
 		}
-		if !strings.Contains(port, ":") {
-			port = net.JoinHostPort(host, port)
-		}
-		ports[port] = service
+		ports[uri.String()] = uri
 	}
 
 	startTime := time.Now()
@@ -95,7 +114,7 @@ func main() {
 				if dots {
 					fmt.Print(".")
 				} else {
-					fmt.Printf("%s: %q\n", port, resp)
+					fmt.Printf("%s: %s\n", port, resp)
 				}
 			}
 		}

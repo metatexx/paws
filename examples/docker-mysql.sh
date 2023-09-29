@@ -1,4 +1,5 @@
 #!/bin/sh
+# can be run with `paws cheat docker 2>&1 | bash`
 docker kill mariadb33301 1>/dev/null 2>&1
 docker kill mysql33302 1>/dev/null 2>&1
 set -e

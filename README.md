@@ -26,40 +26,21 @@ Checking if your localhost runs sshd
 paws 22
 ```
 
-Checking if your router has DNS, localhost has ssh and the gmail smtp is reachable
+* [Examples](examples.md)
+* [Docker script example](examples/docker-mysql.sh)
+
+You can also use the "cheat" command:
 
 ```
-paws -h 192.168.1.1 dns:53 ssh:localhost:22 :smtp.gmail.com:465
+paws cheat --list
+paws cheat examples
+paws cheat docker
 ```
 
-Checking for some ports till they are up after running docker containers
+And even run the docker script from the cheats. You need docker on your system for that to work.
 
 ```
-#!/bin/sh
-docker kill mariadb33307 1>/dev/null 2>&1
-docker kill mysql33306 1>/dev/null 2>&1
-set -e
-echo "running mariadb in docker"
-docker run -d --name=mariadb33301 -p 33301:3306 --rm --env MARIADB_USER=user --env MARIADB_PASSWORD=user --env MARIADB_ROOT_PASSWORD=root mariadb:latest
-echo "running mysql in docker"
-docker run -d --name=mysql33302 -p 33302:3306 --rm mysql/mysql-server:latest
-echo "waiting for all ports to be up (noisy version, use -p or -q for more silent operation)"
-
-paws -w 10s mariadb:33301 mysql:33302
-RETURN=$?
-if [ $RETURN -eq 0 ];
-then
-  echo "all ports were found"
-  exit 0
-else
-  echo "some or all ports were missing"
-fi
-
-echo "removing docker containers"
-docker kill mariadb33301
-docker kill mysql33302
-
-
+paws cheat docker 2>&1 | sh
 ```
 
 ## Usage

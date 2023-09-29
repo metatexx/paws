@@ -5,30 +5,31 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"strings"
 )
 
-func tcpChecks(ports map[string]string) map[string]string {
+func tcpChecks(ports map[string]*url.URL) map[string]string {
 	results := make(map[string]string, len(ports))
-	for in, service := range ports {
-		results[in] = checkConn(in, service)
+	for _, uri := range ports {
+		results[uri.String()] = checkConn(uri)
 	}
 	return results
 }
 
-func checkConn(in, service string) string {
+func checkConn(uri *url.URL) string {
 	protocol := "tcp"
-	address := in
-	if strings.HasSuffix(in, "-udp") {
-		address = in[:len(in)-4]
+	address := uri.Host
+	service := uri.Scheme
+	if strings.HasSuffix(service, "-udp") {
+		service = service[:len(service)-4]
 		protocol = "udp"
 	} else if strings.HasSuffix(address, "-tcp") {
-		address = in[:len(in)-4]
+		service = service[:len(service)-4]
 		protocol = "tcp"
 	}
 
-	//fmt.Println(protocol, address, timeout)
-	conn, err := net.DialTimeout(protocol, address, timeout)
+	conn, err := net.DialTimeout(protocol, uri.Host, timeout)
 	if err != nil {
 		var opErr *net.OpError
 		if errors.As(err, &opErr) {
@@ -56,17 +57,11 @@ func checkConn(in, service string) string {
 			return fmt.Sprintf("not MySQL/MariaDB (%q)", resp)
 		}
 
-	case service == "http":
+	case service == "mssql":
+		// this is very crude and incorrect for now (but kinda works)
+		return IsMSSQLServer(uri)
 
-	case strings.HasPrefix(service, "TEXT/"):
-		// reading the info data from the server
-		resp, respErr := readResponseString(conn)
-		if respErr != nil {
-			return respErr.Error()
-		}
-		if !strings.HasPrefix(resp, service[5:]) {
-			return fmt.Sprintf("expected %q but got %q", service[5:], resp[:min(len(resp), 32)])
-		}
+	case service == "http":
 
 	case service == "ssh":
 		// reading the info data from the server
@@ -97,6 +92,17 @@ func checkConn(in, service string) string {
 		if !strings.HasPrefix(resp, "INFO {") {
 			return fmt.Sprintf("not a NATS server response (%q)", resp[:min(len(resp), 32)])
 		}
+
+	case uri.RawQuery != "":
+		// reading the info data from the server
+		resp, respErr := readResponseString(conn)
+		if respErr != nil {
+			return respErr.Error()
+		}
+		if !strings.HasPrefix(resp, uri.RawQuery) {
+			return fmt.Sprintf("expected %q but got %q", uri.RawQuery, resp[:min(len(resp), 32)])
+		}
+
 	}
 	return "success"
 }
