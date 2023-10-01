@@ -39,6 +39,8 @@ paws replies://:4222INFO
 
 Checking if a mssql server is up and ready for queries
 
+Notice: "ping failed" usually means that the authorisation data did not match!
+
 ```
 paws 'mssql://user:pass@localhost:1433?db=master&q=SELECT 1'
 ```
