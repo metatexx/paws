@@ -44,6 +44,8 @@ func checkConn(uri *url.URL) string {
 		_ = conn.Close()
 	}()
 
+	ret := "verified"
+
 	// depending on the service we may want to do some health / ping checking
 	switch {
 	case service == "mysql":
@@ -93,6 +95,16 @@ func checkConn(uri *url.URL) string {
 			return fmt.Sprintf("not a NATS server response (%q)", resp[:min(len(resp), 32)])
 		}
 
+	case service == "smtp":
+		// reading the info data from the server
+		resp, respErr := readResponseString(conn)
+		if respErr != nil {
+			return respErr.Error()
+		}
+		if !strings.HasPrefix(resp, "220 ") {
+			return fmt.Sprintf("not a SMTP (%q)", resp[:min(len(resp), 32)])
+		}
+
 	case uri.RawQuery != "":
 		// reading the info data from the server
 		resp, respErr := readResponseString(conn)
@@ -103,6 +115,8 @@ func checkConn(uri *url.URL) string {
 			return fmt.Sprintf("expected %q but got %q", uri.RawQuery, resp[:min(len(resp), 32)])
 		}
 
+	default:
+		ret = "found"
 	}
-	return "success"
+	return ret
 }

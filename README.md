@@ -27,6 +27,7 @@ paws 22
 ```
 
 * [Examples](examples.md)
+* [Services](sevices.md)
 * [Docker script example](examples/docker-mysql.sh)
 
 You can also use the "cheat" command:

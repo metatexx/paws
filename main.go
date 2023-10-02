@@ -21,6 +21,9 @@ var fullVersion string
 //go:embed examples.md
 var cheatExamples string
 
+//go:embed services.md
+var cheatServices string
+
 //go:embed examples/docker-mysql.sh
 var cheatDocker string
 
@@ -36,7 +39,6 @@ func main() {
 		"\n\nUse --help-long for more info and --cheats for examples"+"\n\n> Anonymous kitten: 'Curiosity checked the port!'").
 		Version(fullVersion).
 		Author("Copyright 2023 - METATEXX GmbH authors <kontakt@metatexx.de>")
-
 	var host string
 	checkCMD := ax.Command("check", "checks the given port list").Default()
 	checkCMD.Flag("host", "Default host if none is given in the ports").Short('h').Default("localhost").StringVar(&host)
@@ -53,6 +55,7 @@ func main() {
 
 	ax.Cheat("examples", cheatExamples)
 	ax.Cheat("docker", cheatDocker)
+	ax.Cheat("services", cheatServices)
 
 	ax.MustParseWithUsage(os.Args[1:])
 
@@ -105,7 +108,7 @@ func main() {
 		allSuccess := true
 		startCheck := time.Now()
 		for port, resp := range results {
-			if resp != "success" {
+			if resp != "found" && resp != "verified" {
 				allSuccess = false
 			} else {
 				delete(ports, port)
