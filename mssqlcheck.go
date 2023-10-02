@@ -37,5 +37,5 @@ func IsMSSQLServer(uri *url.URL) string {
 		return "no rows returned"
 	}
 
-	return "success"
+	return "verified"
 }
