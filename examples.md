@@ -64,13 +64,13 @@ paws cheat docker 2>&1 | sh
 Waiting for a docker logs to be idle for 3 seconds and fails after 30 seconds
 
 ```
-docker logs <container> | paws log -t 30s -i 3s 
+docker logs -f <container> | paws log -t 30s -i 3s 
 ```
 
 The same as above but showing the data while waiting
 
 ```
-docker logs <container> | paws log -t 30s -i 3s -p
+docker logs -f <container> | paws log -t 30s -i 3s -p
 ```
 
 Waiting for up to five minutes till the words 'ok' and 'done' appear in the given file.
