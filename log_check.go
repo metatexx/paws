@@ -19,10 +19,10 @@ func logCheck() int {
 			fmt.Printf("*** file error: %v", err)
 			return 1
 		}
+		defer func() {
+			_ = input.Close()
+		}()
 	}
-	defer func() {
-		_ = input.Close()
-	}()
 
 	reader := bufio.NewReader(input)
 

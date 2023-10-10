@@ -88,8 +88,8 @@ func main() {
 	fileCheckCMD.Flag("failure", "Regular expression(s) to stop and fail if it is detected in the output"+
 		" (either one must be found)").
 		Short('F').RegexpListVar(&failOnPattern)
-	fileCheckCMD.Flag("success", "Regular expression(s) that stops watching and fail if it is detected in"+
-		" the output (all must be found)").
+	fileCheckCMD.Flag("success", "Regular expression(s) that stops watching with 0 return code"+
+		" if is detected in the output (all must be found)").
 		Short('S').RegexpListVar(&okOnPattern)
 
 	ax.Cheat("examples", cheatExamples)
