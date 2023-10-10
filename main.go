@@ -41,6 +41,7 @@ var (
 	fileGiven     bool
 	passThrough   bool
 	printMatches  bool
+	command       string
 )
 
 func main() {
@@ -91,6 +92,7 @@ func main() {
 	fileCheckCMD.Flag("success", "Regular expression(s) that stops watching with 0 return code"+
 		" if is detected in the output (all must be found)").
 		Short('S').RegexpListVar(&okOnPattern)
+	fileCheckCMD.Flag("command", "a command to run that generates the output to be checked").StringVar(&command)
 
 	ax.Cheat("examples", cheatExamples)
 	ax.Cheat("docker", cheatDocker)
@@ -101,9 +103,10 @@ func main() {
 	var rc int
 	switch cmd {
 	case portCheckCMD.FullCommand():
-		rc = fileCheck()
+		rc = portCheck()
 	case fileCheckCMD.FullCommand():
-		rc = logCheck()
+		rc = fileCheck()
 	}
+	//fmt.Println("returning", rc)
 	os.Exit(rc)
 }
