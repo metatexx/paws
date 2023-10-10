@@ -6,7 +6,23 @@ Before you leap, let PAWS take a peep!
 
 ## What is PAWS?
 
-PAWS can wait until multiple ports are read. It is a bit special, because it does not only can check if a port is available, but also if the expected service is running. It was created to aid in our integration and local testing.
+PAWS is a universal tool to wait for conditions being meet. It was all out ports and services at first but now can
+also wait on (log-files). It was created to aid in our integration and local testing.
+
+It has some unique features:
+
+- It can check for ports being available
+  - It can check for multiple known services (nats/mysql/mssql/ssh and more).
+  - It can also check for a service to return some given text 
+- It can check a file or stdout (and tails it automatically)
+  - For multiple patterns to appear and succeeds after all of them are found.
+  - Fail if any of some given patterns appear.
+  - Fail when the file is not fully read or a condition was found after some time
+  - Succeed if a file does not get output append after some time (being idle). This can be used to wait for services to stabilise.
+  - Found patterns can be highlighted
+  - Output can be transparently passed through.
+  - It can be made fully quiet and only returns the return code to the shell
+- It has multiple ways to handle timeouts.
 
 ## Beware: Work In Progress
 

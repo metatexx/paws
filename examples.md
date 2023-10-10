@@ -1,5 +1,7 @@
 # Examples for the usage of PAWS
 
+## Port & Service
+
 Checking if your localhost runs sshd
 
 ```
@@ -55,4 +57,30 @@ To run the example you need docker installed and do
 
 ```
 paws cheat docker 2>&1 | sh
+```
+
+## (Log-)Files & Stdout
+
+Waiting for a docker logs to be idle for 3 seconds and fails after 30 seconds
+
+```
+docker logs <container> | paws log -t 30s -i 3s 
+```
+
+The same as above but showing the data while waiting
+
+```
+docker logs <container> | paws log -t 30s -i 3s -p
+```
+
+Waiting for up to five minutes till the words 'ok' and 'done' appear in the given file.
+
+```
+paws -f /tmp/file.log -t 5m -S 'ok' -S 'done'
+```
+
+Fail if in the next 5 seconds the word 'failure' appears in the given file and show the line that fails
+
+```
+paws -f /tmp/file.log -t 5m -F 'failure' -P
 ```

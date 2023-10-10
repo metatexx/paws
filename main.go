@@ -2,14 +2,10 @@ package main
 
 import (
 	_ "embed"
-	"fmt"
 	"github.com/choria-io/fisk"
 	"log"
-	"net"
-	"net/url"
 	"os"
-	"strconv"
-	"strings"
+	"regexp"
 	"time"
 )
 
@@ -27,116 +23,87 @@ var cheatServices string
 //go:embed examples/docker-mysql.sh
 var cheatDocker string
 
-var quiet bool
-var dots bool
-var timeout time.Duration
-var wait time.Duration
-var delay time.Duration
+var (
+	ax *fisk.Application
+
+	quiet       bool
+	dots        bool
+	timeout     time.Duration
+	wait        time.Duration
+	delay       time.Duration
+	servicesRaw []string
+	host        string
+
+	idleTime      time.Duration
+	failOnPattern []*regexp.Regexp
+	okOnPattern   []*regexp.Regexp
+	file          string
+	fileGiven     bool
+	passThrough   bool
+	printMatches  bool
+)
 
 func main() {
 	log.SetOutput(os.Stderr)
-	ax := fisk.New(appName, "Port Availability Waiting System: Before you leap, let PAWS take a peep."+
-		"\n\nUse --help-long for more info and --cheats for examples"+"\n\n> Anonymous kitten: 'Curiosity checked the port!'").
+	ax = fisk.New(appName, "Port Availability Waiting System: Before you leap, let PAWS take a peep."+
+		"\n\nUse --help-long for more info and --cheats for examples"+"\n\n"+
+		"> Anonymous kitten: 'Curiosity checked the port!'").
 		Version(fullVersion).
 		Author("Copyright 2023 - METATEXX GmbH authors <kontakt@metatexx.de>")
-	var host string
-	checkCMD := ax.Command("check", "checks the given port list").Default()
-	checkCMD.Flag("host", "Default host if none is given in the ports").Short('h').Default("localhost").StringVar(&host)
-	checkCMD.Flag("quiet", "Don't output anything (only return code)").Short('q').UnNegatableBoolVar(&quiet)
-	checkCMD.Flag("progress", "Output dots while scanning (one dot for each port check)").Short('p').UnNegatableBoolVar(&dots)
-	checkCMD.Flag("wait", "Waiting time to wait for the ports to appear").Short('w').DurationVar(&wait)
-	checkCMD.Flag("timeout", "Timeout for all connect and read timeouts").Short('t').Default("250ms").DurationVar(&timeout)
-	checkCMD.Flag("delay", "Minimal time between checks when waiting").Short('d').Default("250ms").DurationVar(&delay)
-
-	servicesRaw := []string{}
-	checkCMD.Arg("services", "the services (ports) to check").
+	portCheckCMD := ax.Command("portcheck", "checks the given port list").Alias("ports").Default()
+	portCheckCMD.Flag("host", "Default host if none is given in the ports").Short('h').
+		Default("localhost").StringVar(&host)
+	portCheckCMD.Flag("quiet", "Don't output anything (only return code)").Short('q').
+		UnNegatableBoolVar(&quiet)
+	portCheckCMD.Flag("progress", "Output dots while scanning (one dot for each port check)").
+		Short('p').UnNegatableBoolVar(&dots)
+	portCheckCMD.Flag("wait", "Waiting time to wait for the ports to appear").Short('w').
+		DurationVar(&wait)
+	portCheckCMD.Flag("timeout", "Timeout for all connect and read timeouts").Short('t').
+		Default("250ms").DurationVar(&timeout)
+	portCheckCMD.Flag("delay", "Minimal time between checks when waiting").Short('d').
+		Default("250ms").DurationVar(&delay)
+	portCheckCMD.Arg("services", "the services (ports) to check").
 		PlaceHolder("(service(-udp|-tcp):)((host):)port or service(-udp|-tcp)://(user(:pass))@(host):port").
-		Help("Services to scan (see 'paws cheat examples' for more information))").Required().StringsVar(&servicesRaw)
+		Help("Services to scan (see 'paws cheat examples' for more information))").
+		Required().StringsVar(&servicesRaw)
+
+	fileCheckCMD := ax.Command("filecheck", "checks stdin or a file to be idle or meeting other"+
+		" conditions (see flags)").
+		Alias("log")
+	fileCheckCMD.Flag("quiet", "Don't output status information (only return code)").
+		Short('q').UnNegatableBoolVar(&quiet)
+	fileCheckCMD.Flag("pass-through", "Passes the data to stdout while reading").
+		Short('p').UnNegatableBoolVar(&passThrough)
+	fileCheckCMD.Flag("print-matches", "Print lines that match the patterns and highlights them."+
+		" Will only show the first match per pattern.").
+		Short('P').UnNegatableBoolVar(&printMatches)
+	fileCheckCMD.Flag("file", "The file to read (stdin if no file is given)").
+		IsSetByUser(&fileGiven).ExistingFileVar(&file)
+	fileCheckCMD.Flag("timeout", "Timeout after the program returns a failure in any case").
+		Short('t').Default("5s").DurationVar(&timeout)
+	fileCheckCMD.Flag("idle", "When idle time is given, the program returns without failure if there"+
+		" is no data for this amount of time").
+		Short('i').DurationVar(&idleTime)
+	fileCheckCMD.Flag("failure", "Regular expression(s) to stop and fail if it is detected in the output"+
+		" (either one must be found)").
+		Short('F').RegexpListVar(&failOnPattern)
+	fileCheckCMD.Flag("success", "Regular expression(s) that stops watching and fail if it is detected in"+
+		" the output (all must be found)").
+		Short('S').RegexpListVar(&okOnPattern)
 
 	ax.Cheat("examples", cheatExamples)
 	ax.Cheat("docker", cheatDocker)
 	ax.Cheat("services", cheatServices)
 
-	ax.MustParseWithUsage(os.Args[1:])
+	cmd := ax.MustParseWithUsage(os.Args[1:])
 
-	ports := make(map[string]*url.URL)
-	//ctx := ax.Context(context.Background(), nil, nil)
-	var err error
-
-	for _, serviceString := range servicesRaw {
-		uri, _ := url.Parse("noname://" + host + ":1")
-		ax.FatalIfError(err, "internal error: could not parse definition")
-		if strings.Contains(serviceString, "://") {
-			// This is the URI variant for the port definition
-			uri, err = url.Parse(serviceString)
-			ax.FatalIfError(err, "could not parse port definition")
-		} else {
-			var frag string
-			var parts []string
-			parts = strings.SplitN(serviceString, ":", 3)
-			if len(parts) == 3 {
-				_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[2], "-udp"), "-tcp"))
-				ax.FatalIfError(err, "could not parse port information")
-				uri.Scheme = parts[0]
-				frag = parts[1] + ":" + parts[2]
-			} else if len(parts) == 2 {
-				_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[1], "-udp"), "-tcp"))
-				ax.FatalIfError(err, "could not parse port information")
-				uri.Scheme = parts[0]
-				frag = parts[1]
-			} else {
-				_, err = strconv.Atoi(strings.TrimSuffix(strings.TrimSuffix(parts[0], "-udp"), "-tcp"))
-				ax.FatalIfError(err, "could not parse port as int")
-				uri.Scheme = parts[0]
-				frag = parts[0]
-			}
-			if !strings.Contains(frag, ":") {
-				frag = net.JoinHostPort(host, frag)
-			}
-			uri.Host = frag
-		}
-		if _, ok := ports[uri.String()]; ok {
-			ax.Fatalf("duplicate check %q", uri.String())
-		}
-		ports[uri.String()] = uri
+	var rc int
+	switch cmd {
+	case portCheckCMD.FullCommand():
+		rc = fileCheck()
+	case fileCheckCMD.FullCommand():
+		rc = logCheck()
 	}
-
-	startTime := time.Now()
-
-	for {
-		results := tcpChecks(ports)
-		allSuccess := true
-		startCheck := time.Now()
-		for port, resp := range results {
-			if resp != "found" && resp != "verified" {
-				allSuccess = false
-			} else {
-				delete(ports, port)
-			}
-			if !quiet {
-				if dots {
-					fmt.Print(".")
-				} else {
-					fmt.Printf("%s: %s\n", port, resp)
-				}
-			}
-		}
-		if allSuccess {
-			if !quiet && dots {
-				fmt.Println()
-			}
-			break
-		}
-		if time.Since(startTime) > wait {
-			if !quiet && dots {
-				fmt.Println()
-			}
-			os.Exit(1)
-		}
-		since := time.Since(startCheck)
-		if since < delay {
-			time.Sleep(delay - since)
-		}
-	}
-	os.Exit(0)
+	os.Exit(rc)
 }
